@@ -1,0 +1,9 @@
+# IDE
+.idea/
+*.iml
+
+# Build artifacts
+backend/target/
+frontend/dist/
+frontend/node_modules/
+yjs-server/node_modules/

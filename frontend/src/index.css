@@ -172,6 +172,34 @@ body {
   color: #333;
 }
 
+/* Save status indicator */
+.editor-status {
+  display: flex;
+  align-items: center;
+}
+
+.save-status {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.save-status.saved {
+  color: #2e7d32;
+  background: #e8f5e9;
+}
+
+.save-status.saving {
+  color: #1565c0;
+  background: #e3f2fd;
+}
+
+.save-status.unsaved {
+  color: #f57c00;
+  background: #fff3e0;
+}
+
 /* Active users display in editor header */
 .active-users {
   display: flex;
@@ -316,6 +344,14 @@ body {
   overflow: visible;
 }
 
+/* Image styles */
+.ql-editor img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1em 0;
+}
+
 /* Table styles */
 .ql-editor table {
   border-collapse: collapse;
@@ -334,24 +370,85 @@ body {
   outline-offset: -2px;
 }
 
-/* Table toolbar button */
-.ql-toolbar .ql-table {
+/* Custom table insert button */
+.ql-toolbar .ql-table-insert {
   width: 28px;
   height: 24px;
+  padding: 3px 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
 }
 
-.ql-toolbar .ql-table::before {
+.ql-toolbar .ql-table-insert::before {
   content: '';
   display: block;
   width: 16px;
   height: 16px;
-  margin: 4px auto;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23444' stroke-width='2'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cline x1='3' y1='9' x2='21' y2='9'/%3E%3Cline x1='3' y1='15' x2='21' y2='15'/%3E%3Cline x1='9' y1='3' x2='9' y2='21'/%3E%3Cline x1='15' y1='3' x2='15' y2='21'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
 }
 
-.ql-toolbar .ql-table:hover::before {
+.ql-toolbar .ql-table-insert:hover::before {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2306c' stroke-width='2'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cline x1='3' y1='9' x2='21' y2='9'/%3E%3Cline x1='3' y1='15' x2='21' y2='15'/%3E%3Cline x1='9' y1='3' x2='9' y2='21'/%3E%3Cline x1='15' y1='3' x2='15' y2='21'/%3E%3C/svg%3E");
+}
+
+/* Font picker styles */
+.ql-snow .ql-picker.ql-font {
+  width: 130px;
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item::before {
+  content: 'Sans Serif';
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="serif"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="serif"]::before {
+  content: 'Serif';
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="sans-serif"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="sans-serif"]::before {
+  content: 'Sans Serif';
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="monospace"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="monospace"]::before {
+  content: 'Monospace';
+  font-family: Monaco, 'Courier New', monospace;
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Arial"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Arial"]::before {
+  content: 'Arial';
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Georgia"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Georgia"]::before {
+  content: 'Georgia';
+  font-family: Georgia, serif;
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Times New Roman"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Times New Roman"]::before {
+  content: 'Times New Roman';
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Verdana"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Verdana"]::before {
+  content: 'Verdana';
+  font-family: Verdana, Geneva, sans-serif;
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="Courier New"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="Courier New"]::before {
+  content: 'Courier New';
+  font-family: 'Courier New', Courier, monospace;
 }

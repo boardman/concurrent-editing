@@ -5,6 +5,9 @@ import { QuillBinding } from 'y-quill'
 import { WebsocketProvider } from 'y-websocket'
 import QuillCursors from 'quill-cursors'
 import { getUnusedColor } from '../App'
+import { loadDocument, saveDocument } from '../api/documents'
+import { registerInlineStyleAttributors } from '../utils/quillAttributors'
+import { getClipboardMatchers } from '../utils/clipboardMatchers'
 import 'quill/dist/quill.snow.css'
 
 // Register the cursors module
@@ -26,7 +29,7 @@ interface CollaborativeEditorProps {
   onColorChange: (newColor: string) => void
 }
 
-// Configure Quill to output HTML5/CSS2.1 compliant markup
+// Configure Quill to output HTML5/CSS2.1 compliant markup with inline styles
 const configureQuillFormats = () => {
   const Block = Quill.import('blots/block') as typeof import('parchment').BlockBlot
 
@@ -36,13 +39,17 @@ const configureQuillFormats = () => {
   }
 
   Quill.register(ParagraphBlot, true)
+
+  // Register inline style attributors (replaces class-based ql-font-*, ql-align-*, etc.)
+  registerInlineStyleAttributors()
 }
 
 configureQuillFormats()
 
-// Toolbar configuration with custom table button
+// Toolbar configuration - table button will be added manually
 const toolbarOptions = {
   container: [
+    [{ 'font': ['serif', 'sans-serif', 'monospace', 'Arial', 'Georgia', 'Times New Roman', 'Verdana', 'Courier New'] }],
     [{ 'header': [1, 2, 3, false] }],
     ['bold', 'italic', 'underline', 'strike'],
     [{ 'color': [] }, { 'background': [] }],
@@ -50,13 +57,9 @@ const toolbarOptions = {
     [{ 'indent': '-1' }, { 'indent': '+1' }],
     [{ 'align': [] }],
     ['blockquote', 'code-block'],
-    ['link'],
-    ['table'],  // Custom table button
+    ['link', 'image'],
     ['clean']
-  ],
-  handlers: {
-    // Table handler will be set after Quill initialization
-  }
+  ]
 }
 
 export default function CollaborativeEditor({
@@ -79,13 +82,48 @@ export default function CollaborativeEditor({
   const colorCheckedRef = useRef(false)
 
   const [activeUsers, setActiveUsers] = useState<User[]>([])
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastSavedContentRef = useRef<string>('')
 
-  // Function to get clean HTML from the editor
+  // Function to get HTML from the editor for PDF export
   const getHtml = useCallback(() => {
     if (!quillRef.current) return ''
-    const html = quillRef.current.root.innerHTML
-    return cleanHtmlForPdf(html)
+    return quillRef.current.root.innerHTML
   }, [])
+
+  // Function to save document to database
+  const saveToDatabase = useCallback(async () => {
+    if (!quillRef.current) return
+
+    const currentContent = quillRef.current.root.innerHTML
+
+    // Skip if content hasn't changed
+    if (currentContent === lastSavedContentRef.current) {
+      return
+    }
+
+    setSaveStatus('saving')
+    try {
+      await saveDocument(documentId, currentContent)
+      lastSavedContentRef.current = currentContent
+      setSaveStatus('saved')
+    } catch (error) {
+      console.error('Failed to save document:', error)
+      setSaveStatus('unsaved')
+    }
+  }, [documentId])
+
+  // Debounced auto-save function
+  const scheduleAutoSave = useCallback(() => {
+    setSaveStatus('unsaved')
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+    saveTimeoutRef.current = setTimeout(() => {
+      saveToDatabase()
+    }, 2000) // Save 2 seconds after last change
+  }, [saveToDatabase])
 
   // Register this editor with the parent
   useEffect(() => {
@@ -112,7 +150,7 @@ export default function CollaborativeEditor({
     containerRef.current.appendChild(editorDiv)
     editorRef.current = editorDiv
 
-    // Create Quill instance with cursors and table modules
+    // Create Quill instance with cursors, table, and clipboard modules
     const quill = new Quill(editorDiv, {
       theme: 'snow',
       modules: {
@@ -123,16 +161,19 @@ export default function CollaborativeEditor({
         cursors: {
           transformOnTextChange: true
         },
-        table: true
+        table: true,
+        clipboard: {
+          matchers: getClipboardMatchers()
+        }
       },
       placeholder: 'Start typing...',
       formats: [
-        'header',
+        'font', 'header',
         'bold', 'italic', 'underline', 'strike',
         'color', 'background',
         'list', 'indent', 'align',
         'blockquote', 'code-block',
-        'link',
+        'link', 'image',
         'table', 'table-body', 'table-row', 'table-cell'
       ]
     })
@@ -140,14 +181,50 @@ export default function CollaborativeEditor({
     quillRef.current = quill
     cursorsRef.current = quill.getModule('cursors') as QuillCursors
 
-    // Add custom table handler
-    const toolbar = quill.getModule('toolbar')
-    toolbar.addHandler('table', () => {
-      const tableModule = quill.getModule('table')
-      if (tableModule) {
-        tableModule.insertTable(3, 3)  // Insert 3x3 table by default
+    // Add custom table button to toolbar
+    const toolbarElement = containerRef.current?.querySelector('.ql-toolbar')
+    if (toolbarElement) {
+      // Find the clean button and insert table button before it
+      const cleanButton = toolbarElement.querySelector('.ql-clean')
+      if (cleanButton && cleanButton.parentElement) {
+        const tableButtonContainer = document.createElement('span')
+        tableButtonContainer.className = 'ql-formats'
+
+        const tableButton = document.createElement('button')
+        tableButton.type = 'button'
+        tableButton.className = 'ql-table-insert'
+        tableButton.title = 'Insert Table'
+
+        tableButton.addEventListener('click', () => {
+          quill.focus()
+          const tableModule = quill.getModule('table') as { insertTable?: (rows: number, cols: number) => void }
+          if (tableModule && typeof tableModule.insertTable === 'function') {
+            tableModule.insertTable(3, 3)
+          } else {
+            // Fallback: insert table HTML directly
+            const range = quill.getSelection(true)
+            if (range) {
+              const tableHtml = `
+                <table>
+                  <tbody>
+                    <tr><td><br></td><td><br></td><td><br></td></tr>
+                    <tr><td><br></td><td><br></td><td><br></td></tr>
+                    <tr><td><br></td><td><br></td><td><br></td></tr>
+                  </tbody>
+                </table>
+              `
+              quill.clipboard.dangerouslyPasteHTML(range.index, tableHtml)
+            }
+          }
+        })
+
+        tableButtonContainer.appendChild(tableButton)
+        cleanButton.parentElement.parentElement?.insertBefore(
+          tableButtonContainer,
+          cleanButton.parentElement
+        )
       }
-    })
+    }
 
     // Create Yjs document
     const ydoc = new Y.Doc()
@@ -178,6 +255,26 @@ export default function CollaborativeEditor({
     const binding = new QuillBinding(ytext, quill)
     bindingRef.current = binding
 
+    // Load initial content from database when provider syncs
+    provider.on('sync', async (isSynced: boolean) => {
+      if (isSynced && ytext.length === 0) {
+        // Yjs document is empty, try to load from database
+        try {
+          const docData = await loadDocument(documentId)
+          if (docData.content && docData.content.trim() !== '' && docData.content !== '<p><br></p>') {
+            // Insert saved content into the empty Yjs document
+            quill.clipboard.dangerouslyPasteHTML(docData.content)
+            lastSavedContentRef.current = docData.content
+          }
+        } catch (error) {
+          console.error('Failed to load document from database:', error)
+        }
+      } else if (isSynced && ytext.length > 0) {
+        // Document already has content from Yjs, update lastSavedContent
+        lastSavedContentRef.current = quill.root.innerHTML
+      }
+    })
+
     // Set local user awareness
     provider.awareness.setLocalStateField('user', {
       name: userName,
@@ -204,12 +301,14 @@ export default function CollaborativeEditor({
       }
     })
 
-    // Also send cursor position after text changes
+    // Also send cursor position after text changes and trigger auto-save
     quill.on('text-change', (_delta, _oldDelta, source) => {
       if (source === 'user') {
         if (cursorTimeout) clearTimeout(cursorTimeout)
         cursorTimeout = setTimeout(sendCursorPosition, 10)
       }
+      // Trigger auto-save on any text change (including from Yjs sync)
+      scheduleAutoSave()
     })
 
     // Track which remote cursors we've created
@@ -289,6 +388,7 @@ export default function CollaborativeEditor({
     // Cleanup on unmount
     return () => {
       if (cursorTimeout) clearTimeout(cursorTimeout)
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
       provider.awareness.off('change', updateAwareness)
       binding.destroy()
       provider.disconnect()
@@ -308,12 +408,19 @@ export default function CollaborativeEditor({
       initializedRef.current = false
       colorCheckedRef.current = false
     }
-  }, [documentId, onConnectionChange, onColorChange, userName, userColor])
+  }, [documentId, onConnectionChange, onColorChange, userName, userColor, scheduleAutoSave])
 
   return (
     <div className="editor-wrapper">
       <div className="editor-header">
         <span className="editor-title">{title}</span>
+        <div className="editor-status">
+          <span className={`save-status ${saveStatus}`}>
+            {saveStatus === 'saved' && 'Saved'}
+            {saveStatus === 'saving' && 'Saving...'}
+            {saveStatus === 'unsaved' && 'Unsaved'}
+          </span>
+        </div>
         <div className="active-users">
           {activeUsers.length > 0 && (
             <>
@@ -341,57 +448,3 @@ export default function CollaborativeEditor({
   )
 }
 
-// Clean HTML to be compatible with Flying Saucer (HTML5/CSS2.1)
-function cleanHtmlForPdf(html: string): string {
-  const temp = document.createElement('div')
-  temp.innerHTML = html
-  processElement(temp)
-  return temp.innerHTML
-}
-
-function processElement(element: Element): void {
-  Array.from(element.children).forEach(child => {
-    processElement(child)
-  })
-
-  if (element.classList.contains('ql-align-center')) {
-    (element as HTMLElement).style.textAlign = 'center'
-  }
-  if (element.classList.contains('ql-align-right')) {
-    (element as HTMLElement).style.textAlign = 'right'
-  }
-  if (element.classList.contains('ql-align-justify')) {
-    (element as HTMLElement).style.textAlign = 'justify'
-  }
-
-  for (let i = 1; i <= 8; i++) {
-    if (element.classList.contains(`ql-indent-${i}`)) {
-      (element as HTMLElement).style.paddingLeft = `${i * 3}em`
-    }
-  }
-
-  const style = (element as HTMLElement).style
-  if (style.color && style.color.includes('rgb')) {
-    style.color = rgbToHex(style.color)
-  }
-  if (style.backgroundColor && style.backgroundColor.includes('rgb')) {
-    style.backgroundColor = rgbToHex(style.backgroundColor)
-  }
-
-  if (element.classList.contains('ql-code-block-container')) {
-    const pre = document.createElement('pre')
-    pre.innerHTML = element.innerHTML
-    element.parentNode?.replaceChild(pre, element)
-  }
-}
-
-function rgbToHex(rgb: string): string {
-  const match = rgb.match(/rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/)
-  if (!match) return rgb
-
-  const r = parseInt(match[1])
-  const g = parseInt(match[2])
-  const b = parseInt(match[3])
-
-  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`
-}

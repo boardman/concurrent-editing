@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="${documentTitle} ?: 'Document'">Document</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2.5cm 2.5cm 3cm 2.5cm;
+            @bottom-center {
+                content: "Page " counter(page) " of " counter(pages);
+                font-size: 9pt;
+                color: #666666;
+                font-family: sans-serif;
+            }
+        }
+
+        body {
+            font-family: serif;
+            font-size: 12pt;
+            line-height: 1.6;
+            color: #000000;
+        }
+
+        /* Document header - summary on first page */
+        .document-header {
+            margin-bottom: 2em;
+            padding-bottom: 1em;
+            border-bottom: 2px solid #333333;
+        }
+
+        .document-header h1 {
+            margin: 0 0 0.3em 0;
+            font-size: 24pt;
+            color: #333333;
+        }
+
+        .document-meta {
+            font-size: 10pt;
+            color: #666666;
+            font-family: sans-serif;
+        }
+
+        /* Section styling */
+        .section {
+            margin: 1.5em 0;
+        }
+
+        .section-title {
+            font-size: 18pt;
+            font-weight: bold;
+            margin: 0.8em 0 0.4em 0;
+            color: #333333;
+            border-bottom: 1px solid #cccccc;
+            padding-bottom: 0.2em;
+        }
+
+        .section-content {
+            margin-top: 0.5em;
+        }
+
+        /* Typography */
+        h1 { font-size: 24pt; font-weight: bold; margin: 0.67em 0; }
+        h2 { font-size: 18pt; font-weight: bold; margin: 0.83em 0; }
+        h3 { font-size: 14pt; font-weight: bold; margin: 1em 0; }
+        p { margin: 0.8em 0; }
+        strong, b { font-weight: bold; }
+        em, i { font-style: italic; }
+        u { text-decoration: underline; }
+        s, strike { text-decoration: line-through; }
+
+        /* Lists */
+        ul, ol { margin: 1em 0; padding-left: 2em; }
+        li { margin: 0.3em 0; }
+
+        /* Blockquote */
+        blockquote {
+            margin: 1em 2em;
+            padding-left: 1em;
+            border-left: 4px solid #cccccc;
+            color: #555555;
+        }
+
+        /* Code */
+        pre, code {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #f5f5f5;
+            border: 1px solid #dddddd;
+        }
+
+        code {
+            padding: 2px 4px;
+            font-size: 11pt;
+        }
+
+        pre {
+            padding: 1em;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        /* Links */
+        a {
+            color: #0066cc;
+            text-decoration: underline;
+        }
+
+        /* Images */
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 1em 0;
+        }
+
+        /* Tables */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
+            border: 1px solid #000000;
+        }
+
+        tr {
+            page-break-inside: avoid;
+        }
+
+        th {
+            border: 1px solid #000000;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+            background-color: #f0f0f0;
+            font-weight: bold;
+        }
+
+        td {
+            border: 1px solid #000000;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        /* Page break utility */
+        .page-break {
+            page-break-after: always;
+        }
+    </style>
+    <style th:if="${customCss != null}" th:utext="${customCss}"></style>
+</head>
+<body>
+    <!-- Document Header -->
+    <div class="document-header">
+        <h1 th:text="${documentTitle} ?: 'Collaborative Document'">Document Title</h1>
+        <div class="document-meta">
+            <span th:text="'Generated: ' + ${generatedDate}">Generated: January 1, 2026</span>
+        </div>
+    </div>
+
+    <!-- Sections -->
+    <th:block th:each="section, iter : ${sections}">
+        <div class="section">
+            <h2 class="section-title" th:text="${section.title}">Section Title</h2>
+            <div class="section-content" th:utext="${section.content}">
+                Section content goes here.
+            </div>
+        </div>
+        <div th:if="${!iter.last}" class="page-break"></div>
+    </th:block>
+</body>
+</html>
