@@ -8,6 +8,7 @@ import { getUnusedColor } from '../App'
 import { loadDocument, saveDocument } from '../api/documents'
 import { registerInlineStyleAttributors } from '../utils/quillAttributors'
 import { getClipboardMatchers } from '../utils/clipboardMatchers'
+import PdfPreviewModal from './PdfPreviewModal'
 import 'quill/dist/quill.snow.css'
 
 // Register the cursors module
@@ -83,6 +84,9 @@ export default function CollaborativeEditor({
 
   const [activeUsers, setActiveUsers] = useState<User[]>([])
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isPreviewing, setIsPreviewing] = useState(false)
+  const previewUrlRef = useRef<string | null>(null)
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSavedContentRef = useRef<string>('')
 
@@ -91,6 +95,46 @@ export default function CollaborativeEditor({
     if (!quillRef.current) return ''
     return quillRef.current.root.innerHTML
   }, [])
+
+  // Generate a single-section PDF preview
+  const handlePreview = useCallback(async () => {
+    if (!quillRef.current || isPreviewing) return
+    setIsPreviewing(true)
+    try {
+      const html = quillRef.current.root.innerHTML
+      const response = await fetch(`/api/pdf/generate-single?title=${encodeURIComponent(title)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/html' },
+        body: html
+      })
+      if (!response.ok) throw new Error('Failed to generate preview')
+      const blob = await response.blob()
+      setPreviewUrl(oldUrl => {
+        if (oldUrl) URL.revokeObjectURL(oldUrl)
+        return URL.createObjectURL(blob)
+      })
+    } catch (error) {
+      console.error('Error generating preview:', error)
+      alert('Failed to generate PDF preview.')
+    } finally {
+      setIsPreviewing(false)
+    }
+  }, [title, isPreviewing])
+
+  const closePreview = useCallback(() => {
+    setPreviewUrl(currentUrl => {
+      if (currentUrl) URL.revokeObjectURL(currentUrl)
+      return null
+    })
+  }, [])
+
+  // Keep ref in sync for unmount cleanup
+  useEffect(() => {
+    previewUrlRef.current = previewUrl
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
+    }
+  }, [previewUrl])
 
   // Function to save document to database
   const saveToDatabase = useCallback(async () => {
@@ -414,6 +458,14 @@ export default function CollaborativeEditor({
     <div className="editor-wrapper">
       <div className="editor-header">
         <span className="editor-title">{title}</span>
+        <button
+          className="preview-btn"
+          onClick={handlePreview}
+          disabled={isPreviewing}
+          title="Preview as PDF"
+        >
+          {isPreviewing ? 'Loading...' : 'Preview'}
+        </button>
         <div className="editor-status">
           <span className={`save-status ${saveStatus}`}>
             {saveStatus === 'saved' && 'Saved'}
@@ -444,6 +496,9 @@ export default function CollaborativeEditor({
       <div className="editor-container">
         <div ref={containerRef}></div>
       </div>
+      {previewUrl && (
+        <PdfPreviewModal pdfUrl={previewUrl} title={title} onClose={closePreview} />
+      )}
     </div>
   )
 }
